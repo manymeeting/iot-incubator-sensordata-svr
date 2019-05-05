@@ -4,9 +4,14 @@ var app = express();
 
 // Memory storage
 const memStorage = {
+	clientSocket: { // Port and address of incubator client (Arduino)
+		port: {},
+		address: {}
+	},
 	sensorData: {
-		ntc: "23.2",
-		dht: "12.3"
+		ntc: "0.0",
+		dht: "0.0",
+		hum: "0.0"
 	},
 	targetTemperature: "",
 	isMotionDetected: false,
@@ -18,8 +23,8 @@ const memStorage = {
 const PORT = 6868;
 const HOST = "10.50.0.127";
 
-var dgram = require('dgram');
-var udpServer = dgram.createSocket('udp4');
+const dgram = require('dgram');
+const udpServer = dgram.createSocket('udp4');
 
 udpServer.on('listening', function () {
     var address = udpServer.address();
@@ -28,13 +33,26 @@ udpServer.on('listening', function () {
 
 udpServer.on('message', function (message, remote) {
     console.log(remote.address + ':' + remote.port +' - ' + message);
+    memStorage.clientSocket.port = remote.port;
+    memStorage.clientSocket.address = remote.address;
+    
     // Parse message
     message = message.toString();
-    if(message === "Test") {
+    if(message === "Test") { // Test message
 
     	udpServer.send(Buffer.from('Test reply from server'), remote.port, remote.address, (err) => {
     		console.log(err);
     	});
+    }
+    else if(message.substring(0, 4) === "Hum") { 
+    	// Sensor data i.e. "Hum:11.11,Temp:22.22,Analog:33.33,TargetTemp:44.44"
+    	let dataPairs = message.split(",");
+    	let humidity = dataPairs[0].split(":").pop();
+    	let dhtTemp = dataPairs[1].split(":").pop();
+    	let ntcTemp = dataPairs[2].split(":").pop();
+
+    	memStorage.sensorData.ntc = ntcTemp;
+    	memStorage.sensorData.dht = dhtTemp;
     }
 });
 
@@ -81,6 +99,25 @@ app.get("/cam/image", (req, res, next) => {
 });
 
 
+/**
+	Set new target temperature for incubator (Using GET for CORS purpose) 
+*/
+app.get("/incubator/target-temperature", (req, res, next) => {
+	let newTargetTemp = req.params["newTargetTemp"];
+	memStorage.targetTemperature = newTargetTemp;
+	console.log(`User set target temperature to ${newTargetTemp} celsius.`);
+
+	// Send UDP packet with new target data to Arduino
+	udpServer.send(
+		Buffer.from("targetTemp:" + newTargetTemp), 
+		memStorage.clientSocket.port, memStorage.clientSocket.address, 
+		(err) => {
+			console.log(err);
+		}
+	);
+
+	res.jsonp("New target temperature received");
+});
 
 /**
 	Motion detected
