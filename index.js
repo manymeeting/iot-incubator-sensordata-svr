@@ -44,7 +44,7 @@ udpServer.on('message', function (message, remote) {
     		console.log(err);
     	});
     }
-    else if(message.substring(0, 4) === "Hum") { 
+    else if(message.substring(0, 3) === "Hum") { 
     	// Sensor data i.e. "Hum:11.11,Temp:22.22,Analog:33.33,TargetTemp:44.44"
     	let dataPairs = message.split(",");
     	let humidity = dataPairs[0].split(":").pop();
@@ -104,6 +104,8 @@ app.get("/cam/image", (req, res, next) => {
 */
 app.get("/incubator/target-temperature", (req, res, next) => {
 	let newTargetTemp = req.params["newTargetTemp"];
+	newTargetTemp =  myUtils.formatTemperature(newTargetTemp); // Unify the length of data
+
 	memStorage.targetTemperature = newTargetTemp;
 	console.log(`User set target temperature to ${newTargetTemp} celsius.`);
 
@@ -136,3 +138,31 @@ app.post("/cam/image", (req, res, next) => {
  	memStorage.cameraImgPath = req.body["imgPath"];
  	res.send("New image, got it");
 });
+
+const myUtils = {};
+/**
+	Format the temperature like 00.00
+*/
+myUtils.formatTemperature = function(rawTemp) {
+	const maxTemp = "99.99";
+	
+	if(rawTemp.split(".").length > 2) return "NaN"; // Invalid
+
+	if(!rawTemp.includes(".")) {
+		if(rawTemp.length >= 3) return maxTemp;
+
+		rawTemp = parseInt(rawTemp) < 10 ? "0" + rawTemp  :  rawTemp;
+    	return rawTemp + ".00";
+	}
+	else {
+	    let intPart = rawTemp.split(".").shift(); 
+	    intPart = parseInt(intPart); 
+	    intPart = intPart < 10 ? "0" + intPart : intPart + "";
+
+		let fracPart = rawTemp.split(".").pop(); 
+		fracPart = parseInt(fracPart); 
+		fracPart = fracPart < 10 ? fracPart + "0" : fracPart + "";
+
+		return intPart + "." + fracPart.substring(0, 2);
+	}
+}
