@@ -14,14 +14,14 @@ const memStorage = {
 		hum: "0.0"
 	},
 	targetTemperature: "",
-	isMotionDetected: false,
-	cameraImgPath: "https://media.chevrolet.com/content/Pages/news/us/en/2017/nov/1112-corvette/_jcr_content/top_parsys/image_1613279304.img.jpg/1510780124493.jpg"
+	motionAlert: "No motion detected.",
+	cameraImgPath: "http://192.168.29.177/image/test.jpg"
 };
 
 
 // UDP Server
 const PORT = 6868;
-const HOST = "10.50.0.127";
+const HOST = "192.168.29.164";
 
 const dgram = require('dgram');
 const udpServer = dgram.createSocket('udp4');
@@ -51,8 +51,9 @@ udpServer.on('message', function (message, remote) {
     	let dhtTemp = dataPairs[1].split(":").pop();
     	let ntcTemp = dataPairs[2].split(":").pop();
 
-    	memStorage.sensorData.ntc = ntcTemp;
-    	memStorage.sensorData.dht = dhtTemp;
+    	memStorage.sensorData.ntc = ntcTemp.substring(0,6); // Keep first 6 digits
+    	memStorage.sensorData.dht = dhtTemp.substring(0,6);
+    	memStorage.sensorData.hum = humidity.substring(0,6);
     }
 });
 
@@ -98,12 +99,19 @@ app.get("/cam/image", (req, res, next) => {
 	res.jsonp(memStorage.cameraImgPath);
 });
 
+/**
+	Return the latest motion alert 
+*/
+app.get("/motion", (req, res, next) => {
+	res.jsonp(memStorage.motionAlert);
+});
+
 
 /**
 	Set new target temperature for incubator (Using GET for CORS purpose) 
 */
 app.get("/incubator/target-temperature", (req, res, next) => {
-	let newTargetTemp = req.params["newTargetTemp"];
+	let newTargetTemp = req.query["newTargetTemp"];
 	newTargetTemp =  myUtils.formatTemperature(newTargetTemp); // Unify the length of data
 
 	memStorage.targetTemperature = newTargetTemp;
@@ -126,7 +134,11 @@ app.get("/incubator/target-temperature", (req, res, next) => {
 */
 app.post("/motion", (req, res, next) => {
  	console.log(req.body);
- 	memStorage.isMotionDetected = true;
+ 	let currTime = new Date();
+	let formattedTime = currTime.getFullYear() + "-" + (currTime.getMonth() + 1) 
+		+ "-" + currTime.getDate() + " " + currTime.getHours() + ":" + currTime.getMinutes() + ":" + currTime.getSeconds();
+	
+ 	memStorage.motionAlert = "Latest motion: " + formattedTime;
  	res.send("New motion, got it");
 });
 
